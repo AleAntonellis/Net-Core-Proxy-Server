@@ -84,13 +84,7 @@ namespace ProxyServer.ProxyServer.Model
             
                 var clientStreamReader = new StreamReader(sslStream);
 
-                string clientRequest = string.Empty;
-                string readed = string.Empty;
-                do
-                {
-                    readed = clientStreamReader.ReadLine();
-                    clientRequest += readed + "\r\n";
-                } while (!string.IsNullOrEmpty(readed));
+                string clientRequest = clientStreamReader.ReadToEnd();
             
                 request = new ProxyRequest(clientRequest);
                 request.AddHostAndHttpsProtocolToTarget(host);
