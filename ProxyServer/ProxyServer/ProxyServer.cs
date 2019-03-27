@@ -4,24 +4,29 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
+using ProxyServer.ProxyServer.Interface;
 using ProxyServer.ProxyServer.Model;
 using ProxyServer.ProxyServer.State;
 
 namespace ProxyServer.ProxyServer
 {
-    internal class ProxyServer : IDisposable
+    public class ProxyServer : IProxyServer, IDisposable
     {
         private Socket server;
-        private List<Socket> serverSockets;
-        private string ipEndPoint = "127.0.0.1";
-        private int port = 8080;
-        private int limit = 200;
+        private readonly List<Socket> serverSockets;
+        private string ipEndPoint;
+        private int port;
+        private int limit;
         private ProxyState state;
 
         public ProxyServer()
         {
             state = ProxyState.None;
             serverSockets = new List<Socket>();
+            ipEndPoint = "127.0.0.1";
+            port = 8080;
+            limit = 200;
         }
 
         public void Dispose()
@@ -51,6 +56,47 @@ namespace ProxyServer.ProxyServer
             Console.ReadLine();
         }
 
+        public string Status()
+        {
+            return state.ToString();
+        }
+
+        public void SetPort(int portNumber)
+        {
+            if (state != ProxyState.Running)
+            {
+                port = portNumber;
+            }
+            else
+            {
+                throw new Exception("Proxy is running");
+            }
+        }
+
+        public void SetEndPoint(string endPoint)
+        {
+            if (state != ProxyState.Running)
+            {
+                ipEndPoint = endPoint;
+            }
+            else
+            {
+                throw new Exception("Proxy is running");
+            }
+        }
+
+        public void SetLimit(int connectionLimit)
+        {
+            if (state != ProxyState.Running)
+            {
+                limit = connectionLimit;
+            }
+            else
+            {
+                throw new Exception("Proxy is running");
+            }
+        }
+
         private void AcceptClient(IAsyncResult ar)
         {
             try
@@ -60,7 +106,7 @@ namespace ProxyServer.ProxyServer
                 var readState = new ReadState(client, new byte[2048]);
                 client.BeginReceive(readState.Buffer, 0, readState.Buffer.Length, SocketFlags.None, ReadPackets, readState);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 // ignored
             }
@@ -76,7 +122,7 @@ namespace ProxyServer.ProxyServer
             var socket = readState.Socket;
             var buffer = readState.Buffer;
 
-            int read = -1;
+            var read = -1;
 
             try
             {
@@ -112,9 +158,7 @@ namespace ProxyServer.ProxyServer
             if (request.Ended && !request.IsFake)
             {
                 Console.WriteLine(request.ToString());
-                var proxyTunnel = new ProxyTunnel(socket, request);
-                proxyTunnel.CreateTunnel();
-                proxyTunnel.Send();
+                InternalSend(socket, request);
                 return;
             }
 
@@ -122,6 +166,13 @@ namespace ProxyServer.ProxyServer
             readState.Request = request;
             Array.Clear(buffer, 0, buffer.Length);
             if (state == ProxyState.Running) socket.BeginReceive(readState.Buffer, 0, readState.Buffer.Length, SocketFlags.None, ReadPackets, readState);
+        }
+
+        private static void InternalSend(Socket socket, ProxyRequest request)
+        {
+            var proxyTunnel = new ProxyTunnel(socket, request);
+            proxyTunnel.CreateTunnel();
+            proxyTunnel.Send();
         }
 
         private void KillAllPendingSockets()
@@ -141,7 +192,7 @@ namespace ProxyServer.ProxyServer
                 socket.Shutdown(SocketShutdown.Both);
                 socket.Disconnect(false);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 //ignore
             }
